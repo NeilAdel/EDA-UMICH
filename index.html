@@ -33,8 +33,13 @@ async function main(){
  ${section('a20a-trend','9. A20a: Five-year expected price change','Monthly mean and median expected change (cents per gallon).')}
  ${section('a20c-trend','10. A20c: Twelve-month expected price change','Monthly mean and median expected change (cents per gallon).')}
  <section><h2>11. Questionnaire routing checks</h2><p class="desc">Eligible respondents are those selecting “Go up” (1) or “Go down” (5). Magnitude follow-ups are assessed against this eligibility definition.</p><div id="routing"></div><p class="note">The notebook used string comparisons for eligibility after converting direction variables to numeric. This website uses numeric codes 1 and 5 so the intended routing check is actually evaluated.</p></section>
- <section><h2>13. Annual categorical distributions — A20 and A20b</h2><p class="desc">Annual shares of respondents selecting each categorical answer. These replace continuous-variable histograms because A20 and A20b are categorical direction questions.</p><div id="a20-annual-cat" class="plot"></div><div id="a20b-annual-cat" class="plot"></div></section>
- <section><h2>14. Monthly wave categorical comparison — A20 and A20b</h2><p class="desc">Select monthly survey waves (YYYYMM) to compare categorical response distributions. Both questions update together. Bars show the percentage choosing each response category in each selected wave; KDE is not appropriate for categorical responses.</p><div class="controls"><label for="waves"><b>Select monthly waves (Ctrl/Cmd-click for multiple):</b></label><select id="waves" multiple></select><button class="btn" id="recent-waves">Select latest 4 waves</button><button class="btn" id="all-waves">Select all waves</button><button class="btn" id="clear-waves">Clear</button></div><div id="a20-wave-cat" class="plot"></div><div id="a20b-wave-cat" class="plot"></div></section>`;
+ <section><h2>12. Annual distributions — A20a (GASPX2)</h2><p class="desc">Density histograms, 1992–2026; 10-cent bins; values restricted to 0–300 cents, matching the notebook.</p><div id="hist-a20a" class="plot hist"></div></section>
+ <section><h2>13. Annual distributions — A20c (GAS1PX2)</h2><p class="desc">Density histograms, 2005–2026; 10-cent bins; values restricted to 0–200 cents, matching the notebook.</p><div id="hist-a20c" class="plot hist"></div></section>
+ <section><h2>14. Interactive KDE comparison</h2><p class="desc">Select one or more years. The two full-width KDE charts update together, using Gaussian KDE as in the notebook.</p><div class="controls"><label for="years"><b>Select survey years (Ctrl/Cmd-click for multiple):</b></label><select id="years" multiple></select><button class="btn" id="default-years">Select 2019, 2021, 2022, 2023</button><button class="btn" id="all-years">Select all years</button></div><div id="kde-a20a" class="plot"></div><div id="kde-a20c" class="plot"></div></section>
+  <section><h2>15. Monthly response shares by year — A20 and A20b</h2>
+  <p class="desc">Each small panel represents one calendar year. Within each panel, the monthly shares of all five response categories are stacked to 100%. Only years with at least one observed monthly wave are shown. A20 and A20b are displayed separately.</p>
+  <h3>A20: Five-year gasoline price expectations</h3><div id="a20-year-monthly-stacked" class="plot hist"></div>
+  <h3>A20b: Twelve-month gasoline price expectations</h3><div id="a20b-year-monthly-stacked" class="plot hist"></div></section>`;
  // availability chart
  Plotly.newPlot('availability',[{x:data.wave_availability.map(r=>String(r.YYYYMM)),y:data.wave_availability.map(r=>r.GASPX1_nonempty),type:'scatter',mode:'lines+markers',name:'GASPX1',line:{width:2.5},marker:{size:4}},{x:data.wave_availability.map(r=>String(r.YYYYMM)),y:data.wave_availability.map(r=>r.GAS1PX1_nonempty),type:'scatter',mode:'lines+markers',name:'GAS1PX1',line:{width:2.5},marker:{size:4}}],{...baseLayout('Availability of Gasoline Expectation Questions','Number of non-empty responses'),xaxis:{...baseLayout('','').xaxis,type:'category',tickangle:45}}, {responsive:true});
  // monthly availability transposed: notebook display(monthly_availability.T)
@@ -44,31 +49,84 @@ async function main(){
  annualPlot('a20-annual','GASPX1','A20: Five-Year Gasoline Price Expectations');annualPlot('a20b-annual','GAS1PX1','A20b: Twelve-Month Gasoline Price Expectations');
  for(const [id,idx] of [['a20a-trend',0],['a20c-trend',1]]){let s=data.magnitude[idx];Plotly.newPlot(id,[{x:s.data.map(r=>r.date),y:s.data.map(r=>r.mean),type:'scatter',mode:'lines',name:'Mean',line:{width:2.5}},{x:s.data.map(r=>r.date),y:s.data.map(r=>r.median),type:'scatter',mode:'lines',name:'Median',line:{width:2.5}}],baseLayout(s.title,'Expected change (cents per gallon)'),{responsive:true})}
  document.getElementById('routing').innerHTML=table(['Period','Direction question','Magnitude follow-up','Eligible','Eligible with magnitude','Eligible without magnitude','Non-eligible with magnitude'],data.routing.map(r=>[r.period,r.direction_variable,r.magnitude_variable,fmt(r.eligible),fmt(r.eligible_with_magnitude),fmt(r.eligible_without_magnitude),fmt(r.noneligible_with_magnitude)]));
+ function histPlot(id,obj){let years=obj.years;let traces=years.map((r,i)=>({x:r.x,y:r.density,type:'bar',name:String(r.year),xaxis:'x'+(i+1),yaxis:'y'+(i+1),showlegend:false,marker:{color:'#3979b9'},hovertemplate:'Bin: %{x}<br>Density: %{y:.4f}<extra>'+r.year+' · N='+r.n+'</extra>'}));let layout={title:{text:obj.title,font:{size:22}},grid:{rows:Math.ceil(years.length/4),columns:4,pattern:'independent'},height:Math.max(900,Math.ceil(years.length/4)*190),autosize:true,margin:{l:60,r:25,t:75,b:55},font:{size:11},showlegend:false};years.forEach((r,i)=>{layout['xaxis'+(i+1)]={title:{text:'Cents',font:{size:10}},range:[0,obj.xmax],tickfont:{size:9},showgrid:false};layout['yaxis'+(i+1)]={title:{text:'Density',font:{size:9}},tickfont:{size:9},rangemode:'tozero'};});Plotly.newPlot(id,traces,layout,{responsive:true})}
+ histPlot('hist-a20a',data.histograms[0]);histPlot('hist-a20c',data.histograms[1]);
+ const sel=document.getElementById('years');const years=data.kde[0].years.map(r=>r.year);years.forEach(y=>{let o=document.createElement('option');o.value=y;o.textContent=y;sel.appendChild(o)});
+ function updateKDE(){let selected=[...sel.selectedOptions].map(o=>Number(o.value));for(let i=0;i<2;i++){let obj=data.kde[i],tr=obj.years.filter(r=>selected.includes(r.year)).map(r=>({x:obj.x,y:r.density,type:'scatter',mode:'lines',name:`${r.year} (N=${fmt(r.n)})`,line:{width:2.5},hovertemplate:'Expected change: %{x:.1f} cents<br>Density: %{y:.5f}<extra>'+r.year+'</extra>'}));let id=i===0?'kde-a20a':'kde-a20c';Plotly.react(id,tr,{title:{text:obj.title,font:{size:22}},autosize:true,margin:{l:75,r:35,t:75,b:75},xaxis:{title:'Expected price change (cents per gallon)'},yaxis:{title:'Density'},legend:{orientation:'h',y:-.22},hovermode:'x unified'}, {responsive:true})}}
+ function setYears(arr){[...sel.options].forEach(o=>o.selected=arr.includes(Number(o.value)));updateKDE()}
+ document.getElementById('default-years').onclick=()=>setYears([2019,2021,2022,2023]);document.getElementById('all-years').onclick=()=>setYears(years);sel.onchange=updateKDE;setYears([2019,2021,2022,2023]);
 
- const responseOrder=['Go up','Stay the same','Go down',"Don't know",'Refused'];
- function annualCategorical(id,key,title){
-   const rows=data.annual_shares[key];
-   const traces=responseOrder.map(label=>({type:'bar',name:label,x:rows.map(r=>r.year),y:rows.map(r=>r.values[label]??0),marker:{color:COLORS[label]},hovertemplate:'Year %{x}<br>'+label+': %{y:.1f}%<extra></extra>'}));
-   Plotly.newPlot(id,traces,{title:{text:title,font:{size:25}},barmode:'stack',autosize:true,height:680,margin:{l:85,r:35,t:85,b:90},xaxis:{title:'Survey year',dtick:1,tickangle:45},yaxis:{title:'Share of respondents (%)',range:[0,100],gridcolor:'#e8edf2'},legend:{orientation:'h',y:-.22},hovermode:'x unified'},{responsive:true});
- }
- annualCategorical('a20-annual-cat','GASPX1','A20: Five-year expected gasoline price direction');
- annualCategorical('a20b-annual-cat','GAS1PX1','A20b: Twelve-month expected gasoline price direction');
- const sel=document.getElementById('waves');
- const waveRows=data.monthly_shares.GASPX1;
- const waveSet=waveRows.map(r=>Number(r.date.slice(0,4)+r.date.slice(5,7)));
- waveSet.forEach(w=>{let o=document.createElement('option');o.value=w;o.textContent=String(w).slice(0,4)+'-'+String(w).slice(4,6);sel.appendChild(o)});
- function monthlyCategorical(id,key,title,selected){
-   const rows=data.monthly_shares[key],byWave=new Map(rows.map(r=>[Number(r.date.slice(0,4)+r.date.slice(5,7)),r.values]));
-   const traces=selected.map(w=>({type:'bar',name:String(w).slice(0,4)+'-'+String(w).slice(4,6),x:responseOrder,y:responseOrder.map(label=>byWave.get(w)?.[label]??0),hovertemplate:'Response: %{x}<br>Share: %{y:.1f}%<extra>'+w+'</extra>'}));
-   Plotly.react(id,traces,{title:{text:title,font:{size:25}},barmode:'group',autosize:true,height:650,margin:{l:85,r:35,t:85,b:100},xaxis:{title:'Response category'},yaxis:{title:'Share of respondents (%)',range:[0,100],gridcolor:'#e8edf2'},legend:{orientation:'h',y:-.25},hovermode:'x unified',annotations:selected.length===0?[{text:'Select one or more monthly waves above',xref:'paper',yref:'paper',x:.5,y:.5,showarrow:false,font:{size:16}}]:[]},{responsive:true});
- }
- function updateCategorical(){const selected=[...sel.selectedOptions].map(o=>Number(o.value));monthlyCategorical('a20-wave-cat','GASPX1','A20: Five-year expectations by monthly wave',selected);monthlyCategorical('a20b-wave-cat','GAS1PX1','A20b: Twelve-month expectations by monthly wave',selected);}
- function setWaves(arr){[...sel.options].forEach(o=>o.selected=arr.includes(Number(o.value)));updateCategorical()}
- document.getElementById('recent-waves').onclick=()=>setWaves(waveSet.slice(-4));
- document.getElementById('all-waves').onclick=()=>setWaves(waveSet);
- document.getElementById('clear-waves').onclick=()=>setWaves([]);
- sel.onchange=updateCategorical;
- setWaves(waveSet.slice(-4));
+  // Section 15: one monthly stacked-response panel for every year with data.
+  // This is appended as a new section; existing charts and calculations are unchanged.
+  function yearlyMonthlyStacked(id, records, title) {
+    const byYear = new Map();
+    records.forEach(r => {
+      const year = Number(r.date.slice(0, 4));
+      const month = Number(r.date.slice(5, 7));
+      if (!byYear.has(year)) byYear.set(year, []);
+      byYear.get(year).push({month, values: r.values});
+    });
+    const years = [...byYear.keys()].sort((a,b) => a-b);
+    const cols = 4;
+    const rows = Math.ceil(years.length / cols);
+    const traces = [];
+    const layout = {
+      title: {text: title, font: {size: 22}},
+      grid: {rows, columns: cols, pattern: 'independent'},
+      height: Math.max(1000, rows * 235 + 120),
+      autosize: true,
+      paper_bgcolor: '#fff',
+      plot_bgcolor: '#fff',
+      margin: {l: 55, r: 25, t: 75, b: 55},
+      font: {size: 11},
+      showlegend: true,
+      barmode: 'stack',
+      legend: {orientation: 'h', y: -0.035, x: 0.5, xanchor: 'center'}
+    };
+    years.forEach((year, i) => {
+      const axisNum = i + 1;
+      const rowsForYear = byYear.get(year).sort((a,b) => a.month-b.month);
+      Object.keys(COLORS).forEach(label => {
+        traces.push({
+          type: 'bar',
+          name: label,
+          legendgroup: label,
+          showlegend: i === 0,
+          x: rowsForYear.map(r => r.month),
+          y: rowsForYear.map(r => r.values[label] ?? 0),
+          xaxis: axisNum === 1 ? 'x' : 'x' + axisNum,
+          yaxis: axisNum === 1 ? 'y' : 'y' + axisNum,
+          marker: {color: COLORS[label]},
+          hovertemplate: 'Month %{x}<br>' + label + ': %{y:.1f}%<extra>' + year + '</extra>'
+        });
+      });
+      layout['xaxis' + (axisNum === 1 ? '' : axisNum)] = {
+        title: {text: 'Month', font: {size: 10}},
+        tickmode: 'array', tickvals: [1,3,5,7,9,11],
+        ticktext: ['Jan','Mar','May','Jul','Sep','Nov'],
+        range: [0.5,12.5], tickfont: {size: 9}, showgrid: false
+      };
+      layout['yaxis' + (axisNum === 1 ? '' : axisNum)] = {
+        title: {text: 'Share (%)', font: {size: 9}},
+        range: [0,100], dtick: 50, tickfont: {size: 9},
+        gridcolor: '#e8edf2'
+      };
+      // Year label inside each individual panel.
+      const xref = axisNum === 1 ? 'x domain' : 'x' + axisNum + ' domain';
+      const yref = axisNum === 1 ? 'y domain' : 'y' + axisNum + ' domain';
+      layout.annotations = layout.annotations || [];
+      layout.annotations.push({
+        text: String(year), x: 0.5, y: 1.08, xref, yref,
+        showarrow: false, font: {size: 13, color: '#172033'}
+      });
+    });
+    Plotly.newPlot(id, traces, layout, {responsive: true});
+  }
+  yearlyMonthlyStacked('a20-year-monthly-stacked', data.monthly_shares.GASPX1,
+    'A20: Monthly stacked response shares by year');
+  yearlyMonthlyStacked('a20b-year-monthly-stacked', data.monthly_shares.GAS1PX1,
+    'A20b: Monthly stacked response shares by year');
+
  // resize plotly charts after responsive layout settles
  window.addEventListener('resize',()=>document.querySelectorAll('.js-plotly-plot').forEach(p=>Plotly.Plots.resize(p)));
 }
