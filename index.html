@@ -80,7 +80,7 @@ async function main(){
     relative to all available monthly waves for the respective question.
     These are descriptive measures, not tests of representativeness.
   </p>
-</section>;
+</section>`;
  // availability chart
  Plotly.newPlot('availability',[{x:data.wave_availability.map(r=>String(r.YYYYMM)),y:data.wave_availability.map(r=>r.GASPX1_nonempty),type:'scatter',mode:'lines+markers',name:'GASPX1',line:{width:2.5},marker:{size:4}},{x:data.wave_availability.map(r=>String(r.YYYYMM)),y:data.wave_availability.map(r=>r.GAS1PX1_nonempty),type:'scatter',mode:'lines+markers',name:'GAS1PX1',line:{width:2.5},marker:{size:4}}],{...baseLayout('Availability of Gasoline Expectation Questions','Number of non-empty responses'),xaxis:{...baseLayout('','').xaxis,type:'category',tickangle:45}}, {responsive:true});
  // monthly availability transposed: notebook display(monthly_availability.T)
