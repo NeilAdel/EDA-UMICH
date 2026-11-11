@@ -232,8 +232,7 @@ function setupPilotTable(questionKey, magnitudeKey, selectId,
 
   // Available months for this question
   const availableMonths = historicalRows
-    .map(r => r.date.slice(0, 7))
-    .filter(m => m >= candidateStart && m <= candidateEnd);
+    .map(r => r.date.slice(0, 7));
 
   // Populate selectable list
   select.innerHTML = availableMonths.map(month =>
