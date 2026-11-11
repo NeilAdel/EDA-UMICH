@@ -45,27 +45,42 @@ async function main(){
 
 <section>
   <h2>16. Pilot Wave Selection</h2>
+
   <p class="desc">
-    Comparison of candidate waves from September 2021 to March 2022.
-    The table reports sample sizes, response distributions, historical
-    percentiles, and standardized distance from the historical average.
-    Percentiles and distances are calculated using all available monthly waves.
+    Select the monthly waves to compare. You can select multiple months
+    independently for A20 and A20b.
   </p>
 
   <h3>A20: Five-year gasoline price expectations</h3>
+
+  <label for="pilot-a20-select">Select waves:</label>
+  <select id="pilot-a20-select" multiple size="8"
+          style="width:100%; padding:8px; margin:8px 0 15px;">
+  </select>
+
+  <button id="pilot-a20-all">Select all</button>
+  <button id="pilot-a20-clear">Clear selection</button>
+
   <div id="pilot-a20-table"></div>
 
   <h3>A20b: Twelve-month gasoline price expectations</h3>
+
+  <label for="pilot-a20b-select">Select waves:</label>
+  <select id="pilot-a20b-select" multiple size="8"
+          style="width:100%; padding:8px; margin:8px 0 15px;">
+  </select>
+
+  <button id="pilot-a20b-all">Select all</button>
+  <button id="pilot-a20b-clear">Clear selection</button>
+
   <div id="pilot-a20b-table"></div>
 
   <p class="note">
-    A higher historical percentile means that the corresponding response
-    share is higher than in most other observed monthly waves. A higher
-    standardized distance indicates a less historically typical response
-    distribution. These are descriptive measures, not tests of population
-    representativeness.
+    Historical percentiles and standardized distances are calculated
+    relative to all available monthly waves for the respective question.
+    These are descriptive measures, not tests of representativeness.
   </p>
-</section>`;
+</section>;
  // availability chart
  Plotly.newPlot('availability',[{x:data.wave_availability.map(r=>String(r.YYYYMM)),y:data.wave_availability.map(r=>r.GASPX1_nonempty),type:'scatter',mode:'lines+markers',name:'GASPX1',line:{width:2.5},marker:{size:4}},{x:data.wave_availability.map(r=>String(r.YYYYMM)),y:data.wave_availability.map(r=>r.GAS1PX1_nonempty),type:'scatter',mode:'lines+markers',name:'GAS1PX1',line:{width:2.5},marker:{size:4}}],{...baseLayout('Availability of Gasoline Expectation Questions','Number of non-empty responses'),xaxis:{...baseLayout('','').xaxis,type:'category',tickangle:45}}, {responsive:true});
  // monthly availability transposed: notebook display(monthly_availability.T)
@@ -152,10 +167,8 @@ async function main(){
     'A20: Monthly stacked response shares by year');
   yearlyMonthlyStacked('a20b-year-monthly-stacked', data.monthly_shares.GAS1PX1,
     'A20b: Monthly stacked response shares by year');
-// Section 16: Pilot wave selection statistics
 
-const candidateStart = '2021-09';
-const candidateEnd = '2022-03';
+// SECTION 16: INTERACTIVE PILOT WAVE SELECTION
 
 const responseLabels = [
   'Go up',
@@ -165,119 +178,176 @@ const responseLabels = [
   'Refused'
 ];
 
-// Historical percentile of a monthly response share.
-// Uses the empirical distribution of all available monthly waves.
+const candidateStart = '2021-09';
+const candidateEnd = '2022-03';
+
+// Calculate empirical historical percentile
 function historicalPercentile(value, historicalValues) {
-  const valid = historicalValues.filter(v => Number.isFinite(v));
+  const valid = historicalValues.filter(Number.isFinite);
   if (!valid.length) return null;
 
-  const belowOrEqual = valid.filter(v => v <= value).length;
-  return 100 * belowOrEqual / valid.length;
+  return 100 * valid.filter(v => v <= value).length / valid.length;
 }
 
-// RMS standardized distance from the historical average
-// across all five response categories.
+// Calculate standardized distance from historical average
 function historicalDistance(values, historicalRows) {
-  const means = {};
-  const sds = {};
+  const zScores = [];
 
   responseLabels.forEach(label => {
     const series = historicalRows
       .map(r => r.values[label])
       .filter(Number.isFinite);
 
-    means[label] = series.reduce((a, b) => a + b, 0) / series.length;
+    const mean = series.reduce((a, b) => a + b, 0) / series.length;
 
     const variance = series.reduce(
-      (sum, v) => sum + Math.pow(v - means[label], 2), 0
+      (sum, v) => sum + Math.pow(v - mean, 2), 0
     ) / series.length;
 
-    sds[label] = Math.sqrt(variance);
+    const sd = Math.sqrt(variance);
+
+    if (sd > 0) {
+      zScores.push(Math.pow((values[label] - mean) / sd, 2));
+    }
   });
 
-  const zScores = responseLabels
-    .filter(label => sds[label] > 0)
-    .map(label => Math.pow(
-      (values[label] - means[label]) / sds[label], 2
-    ));
-
-  return Math.sqrt(
-    zScores.reduce((a, b) => a + b, 0) / zScores.length
-  );
+  return zScores.length
+    ? Math.sqrt(zScores.reduce((a, b) => a + b, 0) / zScores.length)
+    : null;
 }
 
-function buildPilotTable(questionKey, magnitudeKey, targetId) {
+// Build one interactive comparison table
+function setupPilotTable(questionKey, magnitudeKey, selectId,
+                         tableId, allId, clearId) {
+
   const historicalRows = data.monthly_shares[questionKey];
 
-  const historicalDecrease = historicalRows.map(
-    r => r.values['Go down']
-  );
-
-  const historicalDK = historicalRows.map(
-    r => r.values["Don't know"]
-  );
-
-  const availabilityByMonth = new Map(
+  const availability = new Map(
     data.monthly_availability.map(r => [
-      String(r.YYYYMM),
-      r
+      String(r.YYYYMM), r
     ])
   );
 
-  const candidates = historicalRows.filter(r => {
-    const month = r.date.slice(0, 7);
-    return month >= candidateStart && month <= candidateEnd;
-  });
+  const select = document.getElementById(selectId);
 
-  const headers = [
-    'Month',
-    'Respondents',
-    'Magnitude N',
-    'Go up (%)',
-    'Same (%)',
-    'Go down (%)',
-    "Don't know (%)",
-    'Decrease percentile',
-    'DK percentile',
-    'Historical distance'
-  ];
+  // Available months for this question
+  const availableMonths = historicalRows
+    .map(r => r.date.slice(0, 7))
+    .filter(m => m >= candidateStart && m <= candidateEnd);
 
-  const rows = candidates.map(r => {
-    const month = r.date.slice(0, 7);
-    const yyyymm = month.replace('-', '');
-    const availability = availabilityByMonth.get(yyyymm) || {};
+  // Populate selectable list
+  select.innerHTML = availableMonths.map(month =>
+    `<option value="${month}" selected>${month}</option>`
+  ).join('');
 
-    const values = r.values;
-
-    const decreasePercentile = historicalPercentile(
-      values['Go down'], historicalDecrease
+  function renderTable() {
+    const selectedMonths = new Set(
+      [...select.selectedOptions].map(o => o.value)
     );
 
-    const dkPercentile = historicalPercentile(
-      values["Don't know"], historicalDK
+    const selectedRows = historicalRows.filter(r =>
+      selectedMonths.has(r.date.slice(0, 7))
     );
 
-    const distance = historicalDistance(values, historicalRows);
+    const historicalDecrease = historicalRows.map(
+      r => r.values['Go down']
+    );
 
-    return [
-      month,
-      fmt(availability[questionKey === 'GASPX1' ? 'A20' : 'A20b'] ?? 0),
-      fmt(availability[magnitudeKey === 'GASPX2' ? 'A20a' : 'A20c'] ?? 0),
-      values['Go up'].toFixed(2),
-      values['Stay the same'].toFixed(2),
-      values['Go down'].toFixed(2),
-      values["Don't know"].toFixed(2),
-      decreasePercentile.toFixed(1),
-      dkPercentile.toFixed(1),
-      distance.toFixed(2)
+    const historicalDK = historicalRows.map(
+      r => r.values["Don't know"]
+    );
+
+    const headers = [
+      'Month',
+      'Respondents',
+      'Magnitude N',
+      'Go up (%)',
+      'Same (%)',
+      'Go down (%)',
+      "Don't know (%)",
+      'Decrease percentile',
+      'DK percentile',
+      'Historical distance'
     ];
+
+    const rows = selectedRows.map(r => {
+      const month = r.date.slice(0, 7);
+      const yyyymm = month.replace('-', '');
+      const availabilityRow = availability.get(yyyymm) || {};
+
+      const values = r.values;
+
+      const n = availabilityRow[
+        questionKey === 'GASPX1' ? 'A20' : 'A20b'
+      ] ?? 0;
+
+      const magnitudeN = availabilityRow[
+        magnitudeKey === 'GASPX2' ? 'A20a' : 'A20c'
+      ] ?? 0;
+
+      const decreaseP = historicalPercentile(
+        values['Go down'], historicalDecrease
+      );
+
+      const dkP = historicalPercentile(
+        values["Don't know"], historicalDK
+      );
+
+      const distance = historicalDistance(values, historicalRows);
+
+      return [
+        month,
+        fmt(n),
+        fmt(magnitudeN),
+        values['Go up'].toFixed(2),
+        values['Stay the same'].toFixed(2),
+        values['Go down'].toFixed(2),
+        values["Don't know"].toFixed(2),
+        decreaseP.toFixed(1),
+        dkP.toFixed(1),
+        distance === null ? '—' : distance.toFixed(2)
+      ];
+    });
+
+    document.getElementById(tableId).innerHTML =
+      rows.length
+        ? table(headers, rows)
+        : '<p>No waves selected.</p>';
+  }
+
+  // Select all available waves
+  document.getElementById(allId).addEventListener('click', () => {
+    [...select.options].forEach(o => o.selected = true);
+    renderTable();
   });
 
-  document.getElementById(targetId).innerHTML = table(headers, rows);
+  // Clear selection
+  document.getElementById(clearId).addEventListener('click', () => {
+    [...select.options].forEach(o => o.selected = false);
+    renderTable();
+  });
+
+  // Update table whenever selection changes
+  select.addEventListener('change', renderTable);
+
+  renderTable();
 }
 
-buildPilotTable('GASPX1', 'GASPX2', 'pilot-a20-table');
-buildPilotTable('GAS1PX1', 'GAS1PX2', 'pilot-a20b-table');
+// Initialize the two independent tables
+setupPilotTable(
+  'GASPX1', 'GASPX2',
+  'pilot-a20-select', 'pilot-a20-table',
+  'pilot-a20-all', 'pilot-a20-clear'
+);
+
+setupPilotTable(
+  'GAS1PX1', 'GAS1PX2',
+  'pilot-a20b-select', 'pilot-a20b-table',
+  'pilot-a20b-all', 'pilot-a20b-clear'
+);
+
+
+
  // resize plotly charts after responsive layout settles
  window.addEventListener('resize',()=>document.querySelectorAll('.js-plotly-plot').forEach(p=>Plotly.Plots.resize(p)));
 }
