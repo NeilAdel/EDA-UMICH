@@ -22,21 +22,42 @@ function baseLayout(title,ytitle){return {title:{text:title,font:{size:22}},auto
 async function main(){
  const data=await (await fetch('./data.json')).json(); const app=document.getElementById('app');
  app.innerHTML=`<div class="stats"><div class="stat"><b>${fmt(data.meta.observations)}</b><span>Original observations</span></div><div class="stat"><b>${fmt(data.meta.filtered_observations)}</b><span>Rows with at least one A20/A20b response</span></div><div class="stat"><b>${data.meta.start_year}–${data.meta.end_year}</b><span>Coverage in supplied file</span></div><div class="stat"><b>${data.wave_availability.length}</b><span>Monthly waves in file</span></div></div>
- <section><h2>1. Data overview</h2><p class="desc">Descriptive overview of the six variables used in the notebook.</p>${table(['Variable','Data type','Non-missing','Missing','Missing (%)','Unique values','Min','Max'],data.overview.map(r=>[r.Variable,r['Data type'],fmt(r['Non-missing']),fmt(r.Missing),r['Missing (%)'],fmt(r['Unique values']),r.min,r.max]))}</section>
- <section><h2>2. Waves with both gasoline expectation questions</h2><p class="desc">Monthly waves where both direction questions have at least one non-empty response.</p>${table(['YYYYMM','Total observations','A20 non-empty','A20b non-empty','At least one available','Both available'],data.full_waves.map(r=>[r.YYYYMM,fmt(r.total_observations),fmt(r.GASPX1_nonempty),fmt(r.GAS1PX1_nonempty),r.atleast_one_available,r.both_available]))}</section>
+ <section><h2>1. Michigan gasoline price expectation questions and skip logic</h2>
+ <p class="desc">The four variables form two linked question sequences. The descriptions below summarize the question content; consult the original Michigan questionnaire for exact wording.</p>
+ <div class="stats">
+   <div class="stat"><b>A20</b><span>Direction of expected gasoline price change over the next five years</span></div>
+   <div class="stat"><b>A20a</b><span>Expected magnitude of the five-year price change, in cents per gallon</span></div>
+   <div class="stat"><b>A20b</b><span>Direction of expected gasoline price change over the next 12 months</span></div>
+   <div class="stat"><b>A20c</b><span>Expected magnitude of the 12-month price change, in cents per gallon</span></div>
+ </div>
+ <h3>Question sequence and routing</h3>
+ <div class="note"><b>Step 1 — A20 (five-year direction).</b> Respondents indicate whether they expect gasoline prices to go up, stay the same, go down, or do not know.</div>
+ <p><b>If A20 = Go up or Go down:</b> ask <b>A20a</b>, the expected magnitude of the five-year change. Then continue to A20b.</p>
+ <p><b>If A20 = Stay the same, Don't know, or Refused:</b> skip A20a and continue directly to A20b.</p>
+ <div class="note"><b>Step 2 — A20b (12-month direction).</b> Respondents indicate whether they expect gasoline prices to go up, stay the same, go down, or do not know over the next 12 months.</div>
+ <p><b>If A20b = Go up or Go down:</b> ask <b>A20c</b>, the expected magnitude of the 12-month change.</p>
+ <p><b>If A20b = Stay the same, Don't know, or Refused:</b> skip A20c; the sequence ends.</p>
+ <p class="desc">Important for analysis: A20a and A20c are conditional follow-up questions. Their denominators should not be assumed to equal the full A20/A20b respondent counts.</p>
+ </section>
+ <section><h2>2. Checking the questionnaire skip logic</h2>
+ <p class="desc">This table checks whether magnitude follow-ups are observed among respondents eligible to receive them. Eligibility is defined as answering “Go up” (code 1) or “Go down” (code 5) to the corresponding direction question.</p>
+ <h3>2A. Routing consistency</h3><div id="routing"></div>
+ <p class="note">The check compares eligible and non-eligible respondents with observed magnitude answers. Any non-eligible respondent with a magnitude answer, or eligible respondent without one, may indicate routing, missing-data, or coding issues and should be investigated rather than automatically treated as an error.</p>
+ <h3>2B. Monthly availability and sample sizes</h3>
+ <p class="desc">Monthly counts for total observations (N), A20, A20a, A20b and A20c.</p>
+ <div id="monthly-table"></div>
+ </section>
  ${section('availability','3. Availability of gasoline expectation questions','Monthly number of non-empty responses for A20 (GASPX1) and A20b (GAS1PX1). Use the range slider to zoom into periods.')}
- <section><h2>4. Monthly availability and sample sizes</h2><p class="desc">Transposed monthly availability table from the notebook: N, A20, A20a, A20b and A20c.</p><div id="monthly-table"></div></section>
- ${section('a20-monthly','5. A20: Five-year gasoline price expectations','Monthly response shares (%), with the notebook’s 1Y/5Y/10Y/all range selector.')}
- ${section('a20b-monthly','6. A20b: Twelve-month gasoline price expectations','Monthly response shares (%), with the notebook’s 1Y/5Y/10Y/all range selector.')}
- ${section('a20-annual','7. A20: Annual five-year expectations','Annual stacked response shares; only valid response codes 1, 3, 5, 8 and 9 are included.')}
- ${section('a20b-annual','8. A20b: Annual twelve-month expectations','Annual stacked response shares; only valid response codes 1, 3, 5, 8 and 9 are included.')}
- ${section('a20a-trend','9. A20a: Five-year expected price change','Monthly mean and median expected change (cents per gallon).')}
- ${section('a20c-trend','10. A20c: Twelve-month expected price change','Monthly mean and median expected change (cents per gallon).')}
- <section><h2>11. Questionnaire routing checks</h2><p class="desc">Eligible respondents are those selecting “Go up” (1) or “Go down” (5). Magnitude follow-ups are assessed against this eligibility definition.</p><div id="routing"></div><p class="note">The notebook used string comparisons for eligibility after converting direction variables to numeric. This website uses numeric codes 1 and 5 so the intended routing check is actually evaluated.</p></section>
- <section><h2>12. Annual distributions — A20a (GASPX2)</h2><p class="desc">Density histograms, 1992–2026; 10-cent bins; values restricted to 0–300 cents, matching the notebook.</p><div id="hist-a20a" class="plot hist"></div></section>
- <section><h2>13. Annual distributions — A20c (GAS1PX2)</h2><p class="desc">Density histograms, 2005–2026; 10-cent bins; values restricted to 0–200 cents, matching the notebook.</p><div id="hist-a20c" class="plot hist"></div></section>
- <section><h2>14. Interactive KDE comparison</h2><p class="desc">Select one or more years. The two full-width KDE charts update together, using Gaussian KDE as in the notebook.</p><div class="controls"><label for="years"><b>Select survey years (Ctrl/Cmd-click for multiple):</b></label><select id="years" multiple></select><button class="btn" id="default-years">Select 2019, 2021, 2022, 2023</button><button class="btn" id="all-years">Select all years</button></div><div id="kde-a20a" class="plot"></div><div id="kde-a20c" class="plot"></div></section>
-  <section><h2>15. Monthly response shares by year — A20 and A20b</h2>
+ ${section('a20-monthly','4. A20: Five-year gasoline price expectations','Monthly response shares (%), with the notebook’s 1Y/5Y/10Y/all range selector.')}
+ ${section('a20b-monthly','5. A20b: Twelve-month gasoline price expectations','Monthly response shares (%), with the notebook’s 1Y/5Y/10Y/all range selector.')}
+ ${section('a20-annual','6. A20: Annual five-year expectations','Annual stacked response shares; only valid response codes 1, 3, 5, 8 and 9 are included.')}
+ ${section('a20b-annual','7. A20b: Annual twelve-month expectations','Annual stacked response shares; only valid response codes 1, 3, 5, 8 and 9 are included.')}
+ ${section('a20a-trend','8. A20a: Five-year expected price change','Monthly mean and median expected change (cents per gallon).')}
+ ${section('a20c-trend','9. A20c: Twelve-month expected price change','Monthly mean and median expected change (cents per gallon).')}
+ <section><h2>10. Annual distributions — A20a (GASPX2)</h2><p class="desc">Density histograms, 1992–2026; 10-cent bins; values restricted to 0–300 cents, matching the notebook.</p><div id="hist-a20a" class="plot hist"></div></section>
+ <section><h2>11. Annual distributions — A20c (GAS1PX2)</h2><p class="desc">Density histograms, 2005–2026; 10-cent bins; values restricted to 0–200 cents, matching the notebook.</p><div id="hist-a20c" class="plot hist"></div></section>
+ <section><h2>12. Interactive KDE comparison</h2><p class="desc">Select one or more years. The two full-width KDE charts update together, using Gaussian KDE as in the notebook.</p><div class="controls"><label for="years"><b>Select survey years (Ctrl/Cmd-click for multiple):</b></label><select id="years" multiple></select><button class="btn" id="default-years">Select 2019, 2021, 2022, 2023</button><button class="btn" id="all-years">Select all years</button></div><div id="kde-a20a" class="plot"></div><div id="kde-a20c" class="plot"></div></section>
+  <section><h2>13. Monthly response shares by year — A20 and A20b</h2>
   <p class="desc">Each small panel represents one calendar year. Within each panel, the monthly shares of all five response categories are stacked to 100%. Only years with at least one observed monthly wave are shown. A20 and A20b are displayed separately.</p>
   <h3>A20: Five-year gasoline price expectations</h3><div id="a20-year-monthly-stacked" class="plot hist"></div>
 <h3>A20b: Twelve-month gasoline price expectations</h3>
@@ -44,7 +65,7 @@ async function main(){
 </section>
 
 <section>
-  <h2>16. Pilot Wave Selection</h2>
+  <h2>14. Pilot Wave Selection</h2>
 
   <p class="desc">
     Select the monthly waves to compare. You can select multiple months
